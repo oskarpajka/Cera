@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var showSourcePicker = false
     @State private var showTargetPicker = false
     @State private var sheetVisible = false
+    @State private var showOfflineToast = false
     @State private var translationConfig = TranslationSession.Configuration(
         source: nil,
         target: Locale.Language(identifier: "en")
@@ -28,6 +29,12 @@ struct ContentView: View {
                 .ignoresSafeArea()
 
             controlsLayer
+
+            // Capture flash -- white overlay that fades out.
+            Color.white
+                .opacity(viewModel.showCaptureFlash ? 1 : 0)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             if sheetVisible {
                 TranslationSheetView(
@@ -46,6 +53,12 @@ struct ContentView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
+            // Offline fallback toast
+            if showOfflineToast {
+                offlineToast
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             if viewModel.cameraPermission == .denied {
                 permissionDeniedView
             }
@@ -61,6 +74,15 @@ struct ContentView: View {
             if hasResults && !sheetVisible {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                     sheetVisible = true
+                }
+            }
+        }
+        .onChange(of: viewModel.didFallbackOffline) { _, offline in
+            if offline {
+                withAnimation { showOfflineToast = true }
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    withAnimation { showOfflineToast = false }
                 }
             }
         }
@@ -202,10 +224,34 @@ struct ContentView: View {
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundStyle(.white)
+            if !viewModel.translationMode.isLocal, let provider = viewModel.translationMode.provider {
+                Text(provider.displayName)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.leading, 2)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.ultraThinMaterial, in: Capsule())
+    }
+
+    // MARK: - Offline Toast
+
+    @ViewBuilder
+    private var offlineToast: some View {
+        VStack {
+            Text("No internet \u{2014} using local translation")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.top, 70)
+            Spacer()
+        }
     }
 
     // MARK: - Language Picker

@@ -1,53 +1,76 @@
 # Cera
 
-Cera is an iOS camera translation app that runs entirely on-device. Point the camera at foreign text, tap capture, and get a translated summary. No internet connection, no API keys, no data leaves your phone.
-
-When Apple Intelligence is available, Cera uses the on-device language model to produce natural summaries and scene descriptions rather than literal word-for-word translations. On devices without Apple Intelligence, it falls back to Apple's built-in Translate framework.
+Cera is an iOS camera translation app. Point the camera at foreign text, tap capture, and get a translation. It works fully offline out of the box, with optional cloud API support for OpenAI, Claude, Gemini, and DeepL.
 
 ## How it works
 
 1. The camera runs as a live viewfinder.
-2. You tap the capture button.
-3. The current frame is processed through Vision OCR to extract text.
-4. Vision also classifies the scene (e.g. "restaurant menu", "street sign").
-5. If Apple Intelligence is enabled, the detected text and scene labels are sent to the on-device LLM, which returns a scene description and a translated summary.
-6. If Apple Intelligence is off, the text goes through Apple Translate for a direct translation.
-7. Results appear in a bottom sheet. Tap "Scan Again" to dismiss and capture another frame.
+2. Tap the capture button. A brief flash confirms the frame was grabbed.
+3. Vision OCR extracts text from the captured frame.
+4. Vision classifies the scene (e.g. "restaurant menu", "street sign") and passes the labels as context.
+5. The text is translated using one of three paths:
+   - **On-device LLM** (default when Apple Intelligence is available): produces a natural summary and a scene description in one pass.
+   - **Apple Translate** (fallback when the LLM is unavailable): direct offline translation.
+   - **Cloud API** (optional): sends the text to OpenAI, Claude, Gemini, or DeepL. Falls back to local mode automatically when offline.
+6. Results appear in a draggable bottom sheet. Tap "Scan Again" to dismiss and capture another frame.
 
-All processing happens on the device. The app makes zero network requests.
+## Cloud translation (optional)
+
+Cera ships as a fully offline app. If you want to use a cloud provider instead:
+
+1. Open Settings (gear icon) and switch the mode to **Cloud API**.
+2. Pick a provider: OpenAI, Claude, Gemini, or DeepL.
+3. Enter your API key. It is stored in the device Keychain, never in plain text.
+4. Tap **Verify** to confirm the key works.
+
+When a cloud provider is selected but the device has no internet connection, Cera falls back to local translation automatically and shows a brief notice.
+
+### Supported providers
+
+| Provider | Model / Endpoint                           |
+|----------|--------------------------------------------|
+| OpenAI   | `gpt-4o-mini` via Chat Completions API     |
+| Claude   | `claude-sonnet-4-20250514` via Messages API      |
+| Gemini   | `gemini-2.0-flash` via GenerateContent API |
+| DeepL    | `/v2/translate` (free and pro keys)        |
 
 ## Features
 
-- Manual capture (tap to translate, no continuous scanning)
-- On-device LLM summarization with scene context (requires Apple Intelligence)
-- Apple Translate fallback for devices without Apple Intelligence
-- 20 offline languages via Apple Translate
+- Manual capture with visual flash feedback
+- On-device LLM summarization with scene context (Apple Intelligence)
+- Apple Translate fallback (20 offline languages)
+- Cloud API translation via OpenAI, Claude, Gemini, and DeepL
+- Automatic offline fallback with connectivity monitoring
+- API keys stored in Keychain with one-tap verification
 - Draggable bottom sheet, expandable to full screen
 - Source/target language picker with swap
-- Persistent language preferences
-- Scene classification fed as context to improve translation quality
+- Persistent preferences
 
 ## Project structure
 
 ```
 Cera/
-  CeraApp.swift
-  Utilities/
-    ContinuationGuard.swift       Thread-safe guard for async continuations
+  CeraApp.swift                    App entry point
   Models/
     TranslationModels.swift        Data types (OCR blocks, results, state, languages)
+    APIProvider.swift              Cloud provider enum, translation mode, persistence
   Services/
     CameraService.swift            AVCaptureSession management, frame buffering
     OCRService.swift               Vision text recognition
     SceneClassifier.swift          Vision image classification
-    TranslationService.swift       LLM summarization + Apple Translate fallback
+    TranslationService.swift       On-device LLM summarization + Apple Translate
+    APITranslationService.swift    Cloud API calls (OpenAI, Claude, Gemini, DeepL)
+    KeychainService.swift          Secure API key storage via Security framework
+    ConnectivityMonitor.swift      Network reachability via NWPathMonitor
+  Utilities/
+    ContinuationGuard.swift        Thread-safe guard for async continuations
   ViewModels/
     CameraViewModel.swift          Capture pipeline orchestration
   Views/
     CameraView.swift               UIViewRepresentable camera preview
-    ContentView.swift              Main screen (camera, controls, sheet)
+    ContentView.swift              Main screen (camera, controls, sheet, flash)
     TranslationSheetView.swift     Results bottom sheet
-    SettingsView.swift             Language and processing preferences
+    SettingsView.swift             Language, mode, API key, and processing settings
 ```
 
 ## Requirements
@@ -57,7 +80,7 @@ Cera/
 - Swift 6.0
 - Physical device with a camera (the simulator has no camera)
 
-Apple Intelligence (available on iPhone 15 Pro and later) is needed for the AI summary feature. Without it, the app still works using Apple Translate.
+Apple Intelligence (iPhone 15 Pro and later) is needed for the AI summary feature. Without it, the app works using Apple Translate or a cloud provider.
 
 ## Building
 
@@ -67,21 +90,18 @@ Apple Intelligence (available on iPhone 15 Pro and later) is needed for the AI s
    ```
 2. Open `Cera.xcodeproj` in Xcode.
 3. Select your physical device as the run destination.
-4. Build and run (`Cmd+R`).
+4. Build and run.
 
-The project has no external dependencies. Everything uses Apple frameworks (Vision, Translation, FoundationModels, AVFoundation).
+No external dependencies. Everything uses Apple frameworks (Vision, Translation, FoundationModels, AVFoundation, Network, Security).
 
-On first launch, the app will ask for camera permission. If you want the AI summary feature, make sure Apple Intelligence is enabled on your device under Settings > Apple Intelligence & Siri. The on-device model may take a few minutes to download the first time.
-
-Offline translation language packs are managed by iOS. You can download additional languages under Settings > General > Language & Region > Translation Languages.
+Offline translation packs are managed by iOS under Settings > General > Language & Region > Translation Languages.
 
 ## Privacy
 
-- No network requests
-- No API keys
-- No analytics or telemetry
-- No data collection
-- Camera frames are processed in memory and never written to disk
+- **Local mode**: No network requests. All processing happens on-device. Camera frames are processed in memory and never written to disk.
+- **Cloud mode**: Only the recognized text is sent to the selected API provider. No images, no metadata, no telemetry.
+- API keys are stored in the device Keychain and never leave the device.
+- No analytics or data collection.
 
 ## License
 
